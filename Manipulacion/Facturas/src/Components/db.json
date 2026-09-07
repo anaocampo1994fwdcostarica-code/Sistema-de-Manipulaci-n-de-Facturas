@@ -1,0 +1,11 @@
+{
+    "invoices": [
+        {
+            "issuerName": "TechStore S.A.",
+            "clientName": "Juan Pérez",
+            "invoiceNumber": "FAC-001",
+            "items": [],
+            "id": 1
+        }
+    ]
+}

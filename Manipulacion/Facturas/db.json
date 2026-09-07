@@ -1,0 +1,42 @@
+{
+  "invoices": [
+    {
+      "issuerName": "TechStore S.A.",
+      "issuerId": "101010101",
+      "clientName": "BAC San José ",
+      "clientAddress": "San José, Costa Rica/ bac@gmail.com",
+      "invoiceNumber": "FAC-5181",
+      "date": "2026-09-07",
+      "items": [
+        {
+          "id": 1,
+          "description": "Datafono ",
+          "quantity": 1,
+          "price": 65000
+        }
+      ],
+      "createdAt": "2026-09-07T19:24:16.160Z",
+      "id": "Harw3KR8Lvs"
+    },
+    {
+      "issuerName": "TechStore S.A.",
+      "issuerId": "101010101",
+      "clientName": "Dos Pinos ",
+      "clientAddress": "Dos Pinos/ Dos Pinos@gmail.com",
+      "invoiceNumber": "FAC-4185",
+      "date": "2026-09-07",
+      "taxRate": 0.13,
+      "items": [
+        {
+          "id": 1788809764481,
+          "description": "Laptop Pro 16 pul",
+          "quantity": 1,
+          "price": 450000
+        }
+      ],
+      "createdAt": "2026-09-07T19:37:03.389Z",
+      "id": "-6fPPYNJWxw"
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}
