@@ -1,10 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import InvoiceForm from './Components/InvoiceForm'
 import InvoiceList from './Components/InvoiceList'
 import InvoiceDetail from './Components/InvoiceDetail'
+import {
+  getAllInvoices,
+  getInvoiceById,
+  createInvoice,
+  updateInvoice,
+  deleteInvoice,
+  searchInvoiceByNumber
+} from './services/invoiceService'
 import './App.css'
 
-const API_URL = 'http://localhost:3001/invoices';
 
 function App() {
   const [invoices, setInvoices] = useState([]);
@@ -12,90 +19,73 @@ function App() {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Cargar facturas desde db.json al iniciar (GET)
-  useEffect(() => {
-    fetch(API_URL)
-      .then(response => response.json())
-      .then(data => {
-        setInvoices(data);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error("Error cargando facturas:", error);
-        setLoading(false);
-      });
+  // 1. Cargar facturas iniciales mediante el servicio (GET)
+  const fetchInvoices = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getAllInvoices();
+      setInvoices(data);
+    } catch (error) {
+      console.error("Error cargando facturas desde el servicio:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // 2. Guardar (POST) o Actualizar (PUT) Factura
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+// 2. Búsqueda en tiempo real con el servicio (searchInvoiceByNumber)
+const handleSearch = async (query) => {
+  setSearchQuery(query);
+  
+// Si el campo está vacío, volvemos a cargar todas las facturas
+  if (query.trim() === '') {
+    fetchInvoices(); 
+    return;
+  }
+
+  try {
+    const results = await searchInvoiceByNumber(query);
+    setInvoices(results);
+  } catch (error) {
+    console.error("Error al buscar facturas:", error);
+  }
+};
+
+  // 3. Guardar (POST) o Actualizar (PUT) Factura usando el servicio
   const handleSaveInvoice = async (invoiceData) => {
     try {
       if (editingInvoice) {
         // MODO EDICIÓN (PUT)
-        const response = await fetch(`${API_URL}/${editingInvoice.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...invoiceData,
-            id: editingInvoice.id,
-            updatedAt: new Date().toISOString()
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Error al actualizar la factura en la base de datos');
-        }
-
-        const updatedInvoice = await response.json();
-        setInvoices(invoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv));
+        const updatedInvoice = await updateInvoice(editingInvoice.id, invoiceData);
+        setInvoices(prev => prev.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv));
         setEditingInvoice(null);
         setCurrentView('list');
       } else {
         // MODO CREACIÓN (POST)
-        const invoiceToSave = {
-          ...invoiceData,
-          createdAt: new Date().toISOString()
-        };
-
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(invoiceToSave),
-        });
-
-        if (!response.ok) {
-          throw new Error('Error al guardar la factura en la base de datos');
-        }
-
-        const savedInvoice = await response.json();
-        setInvoices([...invoices, savedInvoice]);
+        const savedInvoice = await createInvoice(invoiceData);
+        setInvoices(prev => [...prev, savedInvoice]);
         setCurrentView('list');
       }
+      setSearchQuery('');
     } catch (error) {
       console.error('Error al guardar factura:', error);
-      alert('Hubo un error al procesar la factura.');
+      alert('Hubo un error al procesar la factura con el servicio.');
     }
   };
 
-  // 3. Eliminar factura de db.json (DELETE)
+  // 4. Eliminar factura usando el servicio (DELETE)
   const handleDeleteInvoice = async (invoiceId) => {
     const confirmDelete = window.confirm("¿Está seguro de que desea eliminar esta factura?");
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`${API_URL}/${invoiceId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al eliminar la factura');
-      }
-
-      setInvoices(invoices.filter(inv => inv.id !== invoiceId));
+      await deleteInvoice(invoiceId);
+      setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
       
       if (selectedInvoice && selectedInvoice.id === invoiceId) {
         setSelectedInvoice(null);
@@ -107,7 +97,24 @@ function App() {
       }
     } catch (error) {
       console.error('Error al eliminar factura:', error);
-      alert('Hubo un error al eliminar la factura de la base de datos');
+      alert('Hubo un error al eliminar la factura mediante el servicio');
+    }
+  };
+
+  // 5. Ver detalle (consultando con getInvoiceById para consistencia de datos)
+  const handleSelectInvoice = async (invoice) => {
+    try {
+      if (invoice.id) {
+        const freshInvoice = await getInvoiceById(invoice.id);
+        setSelectedInvoice(freshInvoice);
+      } else {
+        setSelectedInvoice(invoice);
+      }
+      setCurrentView('detail');
+    } catch (error) {
+      console.warn("No se pudo obtener el detalle fresco, usando local:", error);
+      setSelectedInvoice(invoice);
+      setCurrentView('detail');
     }
   };
 
@@ -124,11 +131,6 @@ function App() {
     setCurrentView('list');
   };
 
-  const handleSelectInvoice = (invoice) => {
-    setSelectedInvoice(invoice);
-    setCurrentView('detail');
-  };
-
   const handleGoToNewForm = () => {
     setEditingInvoice(null);
     setSelectedInvoice(null);
@@ -139,6 +141,7 @@ function App() {
     setEditingInvoice(null);
     setSelectedInvoice(null);
     setCurrentView('list');
+    fetchInvoices();
   };
 
   // Calculos generales de métricas dinámicas
@@ -151,10 +154,10 @@ function App() {
 
   const totalItemsCount = invoices.reduce((sum, inv) => sum + (inv.items?.length || 0), 0);
 
-  if (loading) {
+  if (loading && invoices.length === 0) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', flexDirection: 'column', gap: '16px' }}>
-        <p style={{ color: '#64748b', fontWeight: '500' }}>Cargando base de datos...</p>
+        <p style={{ color: '#64748b', fontWeight: '500' }}>Cargando facturas desde el servicio...</p>
       </div>
     );
   }
@@ -166,7 +169,7 @@ function App() {
         <div className="brand-section">
           <div className="brand-info">
             <h1>Sistema de Facturación</h1>
-            <p>Control y Emisión de Comprobantes Electrónicos</p>
+            <p>Control y Emisión de Comprobantes Electrónicos (Clean Architecture)</p>
           </div>
         </div>
 
@@ -190,7 +193,7 @@ function App() {
       <section className="stats-grid">
         <div className="stat-card">
           <div className="stat-data">
-            <h4>Total Emitidas</h4>
+            <h4>Total Facturas</h4>
             <div className="stat-value">{invoices.length}</div>
           </div>
         </div>
@@ -227,6 +230,8 @@ function App() {
             onNewInvoice={handleGoToNewForm}
             onEditInvoice={handleStartEdit}
             onDeleteInvoice={handleDeleteInvoice}
+            searchQuery={searchQuery}
+            onSearch={handleSearch}
           />
         )}
 
